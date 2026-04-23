@@ -1,0 +1,70 @@
+// Parameters
+real nu = 0.1;
+real T = 1.;
+real dt = 0.1;
+int Nmesh = 10;
+
+// Mesh
+mesh Th = square(Nmesh, Nmesh);
+
+// Fespace
+fespace Vh(Th, P2);
+Vh u, v;
+Vh uu, vv;
+Vh uold=0, vold=0;
+
+fespace Qh(Th, P1);
+Qh p;
+Qh pp;
+
+// Problem
+problem stokes (u, v, p, uu, vv, pp)
+    = int2d(Th)(
+          (u*uu+v*vv)/dt
+        + nu*(dx(u)*dx(uu) + dy(u)*dy(uu) + dx(v)*dx(vv) + dy(v)*dy(vv))
+        - p*pp*1.e-6
+        - p*(dx(uu) + dy(vv))
+        - pp*(dx(u) + dy(v))
+    )
+    - int2d(Th)(
+          (uold*uu+vold*vv)/dt
+    )
+    + on(1, 2, 4, u=0, v=0)
+    + on(3, u=1, v=0)
+    ;
+
+// Time loop
+int m, M = T/dt;
+for(m = 0; m < M; m++){
+    stokes;
+    uold = u;
+    vold = v;
+}
+
+// Norme L2 finale — lue par le script Python
+real normL2 = sqrt(int2d(Th)(u^2 + v^2));
+cout << "||u||_L2 = " << normL2 << endl;
+
+// Plot
+plot(p, [u, v], value=true, wait=true, cmm="t="+m*dt);
+
+// Export grille cartesienne pour visualisation Python
+int Nx = 100, Ny = 100;
+real hx = 1.0/Nx, hy = 1.0/Ny;
+
+{
+    ofstream fout("stokes_euler_data.csv");
+    fout << "x,y,u1,u2,p" << endl;
+    for(int i = 0; i <= Nx; i++){
+        for(int j = 0; j <= Ny; j++){
+            real xi = i*hx;
+            real yj = j*hy;
+            fout << xi << "," << yj << ","
+                 << u(xi,yj) << ","
+                 << v(xi,yj) << ","
+                 << p(xi,yj) << endl;
+        }
+    }
+}
+
+cout << "Export CSV : stokes_euler_data.csv" << endl;

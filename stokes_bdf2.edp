@@ -1,0 +1,99 @@
+// Stokes BDF2 — Cavite entrainee (sans solution manufacturee)
+real viscosite = 0.1;
+real Tfinal    = 1.0;
+real dt        = 0.05;
+real epsilon   = 1e-8;
+int  Nmesh     = 20;
+
+mesh Th = square(Nmesh, Nmesh);
+
+fespace Vh(Th, P2);
+fespace Qh(Th, P1);
+
+Vh u, v, uh, vh;
+Vh uold=0, vold=0;
+Vh uoldold=0, voldold=0;
+Qh p, ph;
+
+// ============================================================
+// Euler implicite — 1er pas (initialisation de uoldold)
+// ============================================================
+problem DepartEuler(u, v, p, uh, vh, ph)
+    = int2d(Th)(
+          (u*uh + v*vh)/dt
+        + viscosite*(dx(u)*dx(uh) + dy(u)*dy(uh) + dx(v)*dx(vh) + dy(v)*dy(vh))
+        - p*(dx(uh) + dy(vh))
+        - ph*(dx(u) + dy(v))
+        + epsilon*p*ph
+    )
+    - int2d(Th)(
+          (uold*uh + vold*vh)/dt
+    )
+    + on(1, 2, 4, u=0, v=0)
+    + on(3, u=1, v=0)
+    ;
+
+// ============================================================
+// BDF2
+// ============================================================
+problem StokesBDF2(u, v, p, uh, vh, ph)
+    = int2d(Th)(
+          (1.5*u*uh + 1.5*v*vh)/dt
+        + viscosite*(dx(u)*dx(uh) + dy(u)*dy(uh) + dx(v)*dx(vh) + dy(v)*dy(vh))
+        - p*(dx(uh) + dy(vh))
+        - ph*(dx(u) + dy(v))
+        + epsilon*p*ph
+    )
+    - int2d(Th)(
+          (2.0*uold*uh + 2.0*vold*vh)/dt
+        - (0.5*uoldold*uh + 0.5*voldold*vh)/dt
+    )
+    + on(1, 2, 4, u=0, v=0)
+    + on(3, u=1, v=0)
+    ;
+
+// ============================================================
+// 1er pas : Euler de t=0 vers t=dt
+// ============================================================
+DepartEuler;
+uoldold = uold;   voldold = vold;
+uold    = u;      vold    = v;
+
+// ============================================================
+// Boucle BDF2
+// ============================================================
+int M = int(Tfinal/dt);
+
+for(int n = 1; n < M; n++){
+    StokesBDF2;
+    uoldold = uold;   voldold = vold;
+    uold    = u;      vold    = v;
+}
+
+// Norme L2 finale — lue par le script Python
+real normL2 = sqrt(int2d(Th)(u^2 + v^2));
+cout << "||u||_L2 = " << normL2 << endl;
+
+// Visualisation finale
+plot(p, [u, v], value=true, wait=true, cmm="BDF2 Cavite - Champ Final");
+
+// Export grille cartesienne pour visualisation Python
+int Nx = 100, Ny = 100;
+real hx = 1.0/Nx, hy = 1.0/Ny;
+
+{
+    ofstream fout("stokes_bdf2_cavite_data.csv");
+    fout << "x,y,u1,u2,p" << endl;
+    for(int i = 0; i <= Nx; i++){
+        for(int j = 0; j <= Ny; j++){
+            real xi = i*hx;
+            real yj = j*hy;
+            fout << xi << "," << yj << ","
+                 << u(xi,yj) << ","
+                 << v(xi,yj) << ","
+                 << p(xi,yj) << endl;
+        }
+    }
+}
+
+cout << "Export CSV : stokes_bdf2_cavite_data.csv" << endl;
