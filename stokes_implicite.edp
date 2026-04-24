@@ -68,3 +68,25 @@ real hx = 1.0/Nx, hy = 1.0/Ny;
 }
 
 cout << "Export CSV : stokes_euler_data.csv" << endl;
+
+// ---- Export profil vertical x=0.5 (pour comparaison u1 vs Ghia) ----
+{
+    ofstream fp1("stokes_euler_profile.csv");
+    fp1 << "y,u1,u2\n";
+    for(int i = 0; i <= 300; i++){
+        real yy = i * 1.0 / 300;
+        fp1 << yy << "," << u(0.5, yy) << "," << v(0.5, yy) << "\n";
+    }
+}
+cout << "Export vertical : stokes_euler_profile.csv" << endl;
+
+// ---- Export profil horizontal y=0.5 (pour comparaison u2 vs Ghia) ----
+{
+    ofstream fp2("stokes_euler_profile_h.csv");
+    fp2 << "x,u1,u2\n";
+    for(int i = 0; i <= 300; i++){
+        real xx = i * 1.0 / 300;
+        fp2 << xx << "," << u(xx, 0.5) << "," << v(xx, 0.5) << "\n";
+    }
+}
+cout << "Export horizontal : stokes_euler_profile_h.csv" << endl;
