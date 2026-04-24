@@ -212,4 +212,4 @@ L'ordre réduit de CN sur la cavité est dû à l'incompatibilité entre la cond
 **Rabelais RIOLA**  
 **Eriode HOUNTONGBE**  
 **Jean-Marie AGOUNDO**  
-Cycle ingénieur MACS2 — Institut Galilée, Université Sorbonne Paris Nord
+
