@@ -1,3 +1,28 @@
+# Stokes Instationnaire — Cavité Entraînée
+
+Projet numérique MACS2  
+Schémas temporels pour les équations de Stokes instationnaires appliqués au problème de la cavité entraînée (lid-driven cavity).
+
+---
+
+## Structure du projet
+
+```
+.
+├── stokes_implicite.edp        # Schéma Euler implicite (ordre 1)
+├── stokes_cn.edp               # Schéma Crank-Nicolson (ordre 2)
+├── stokes_bdf2.edp             # Schéma BDF2 (ordre 2)
+│
+├── plot_stokes.py              # Visualisation du champ final (6 panneaux)
+├── convergence_ordre.py        # Convergence temporelle en dt (loglog)
+├── convergence_mesh.py         # Convergence spatiale en h (loglog)
+├── sensibilite_maillage.py     # Sensibilité au maillage — norme ||u(T)||_L2
+├── sensibilite_nu.py           # Sensibilité à la viscosité — norme ||u(T)||_L2
+├── comparaison_ghia.py         # Comparaison profils vitesse vs Ghia et al. (1982)
+│
+└── README.md
+```
+
 ---
 
 ## Problème physique
@@ -114,22 +139,17 @@ python sensibilite_nu.py
 
 Trace $\|u(T)\|_{L^2}$ en fonction de $\nu$ à maillage fixe pour les trois schémas.
 
-### Comparaison avec la littérature
+### Comparaison avec Ghia et al. (1982)
+
+Ajouter d'abord les blocs d'export dans chaque `.edp` (voir ci-dessous), puis :
 
 ```bash
 python comparaison_ghia.py
 ```
 
-Compare les profils $u_1(0.5, y)$ et $u_2(x, 0.5)$ avec les données tabulées de
-Ghia et al. (1982) pour Re=100. Produit une figure deux panneaux et un tableau
-d'écarts RMS.
+Produit une figure deux panneaux et un tableau d'écarts RMS entre les profils de vitesse et les données de référence de Ghia et al. (1982) pour Re=100.
 
-Prérequis : générer d'abord les profils depuis FreeFEM en ajoutant le bloc
-d'export dans chaque `.edp` (voir section Export profils ci-dessous).
-
-#### Export profils depuis FreeFEM
-
-Ajouter à la fin de chaque `.edp` :
+#### Blocs d'export à ajouter dans chaque `.edp`
 
 ```freefem
 // Export profil vertical x=0.5
@@ -168,17 +188,6 @@ Adapter le nom du CSV (`stokes_euler` → `stokes_cn` / `stokes_bdf2`) selon le 
 
 L'ordre réduit de CN sur la cavité est dû à l'incompatibilité entre la condition initiale nulle et la condition au bord $u=1$ sur le bord supérieur — cette singularité initiale dégrade l'ordre global. Sur un problème à solution régulière (solution manufacturée), CN retrouve son ordre 2 théorique.
 
-### Comparaison avec Ghia et al. (1982)
-
-| Grandeur | Nos résultats (Stokes) | Ghia Re=100 |
-|----------|----------------------|-------------|
-| $u_{1,\min}(0.5, y)$ | $\approx -0.21$ | $-0.211$ |
-| $u_{2,\min}(x, 0.5)$ | $\approx -0.24$ | $-0.245$ |
-| Écart RMS $u_1$ | $0.030$ | — |
-| Écart RMS $u_2$ | $0.033$ | — |
-
-L'écart (~3%) est d'origine physique : Ghia résout Navier-Stokes, notre modèle résout Stokes sans terme convectif.
-
 ### Sensibilité physique
 
 - La norme $\|u(T)\|_{L^2}$ est quasi-indépendante du maillage pour $N \geq 16$ — les trois schémas convergent vers la même solution physique.
@@ -198,8 +207,9 @@ L'écart (~3%) est d'origine physique : Ghia résout Navier-Stokes, notre modèl
 
 ---
 
-## Auteur
+## Auteurs
 
-**Jean-Marie Nonhouénou Agoundo**  
-**Eriode HOUNTONGBE**
-**Rabelais ERIOLA**
+**Rabelais RIOLA**  
+**Eriode HOUNTONGBE**  
+**Jean-Marie AGOUNDO**  
+Cycle ingénieur MACS2 — Institut Galilée, Université Sorbonne Paris Nord
