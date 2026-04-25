@@ -1,0 +1,66 @@
+border A1(t=0,1){x=2*t ; y=0; label=1;}
+border A2(t=0,1){x=2   ; y=t; label=2;}
+border A3(t=0,1){x=2*(1-t); y=1; label=3;}
+border A4(t=0,1){x=0; y=1-t; label=4;}
+border ellipse(t=0,2*pi){x=1+0.5*cos(t); y=0.5+0.3*sin(t); label=5;}
+
+mesh Th = buildmesh(A1(40)+A2(20)+A3(40)+A4(20)+ellipse(-30));
+plot(Th, wait=true);
+
+fespace Vh(Th,P2);
+fespace Qh(Th,P1);
+
+Vh u1,u2,u1old,u2old,v1,v2;
+Qh p,q;
+
+real nu = 1.0;
+real T = 1.0;
+real dt = 0.1;
+int M = T/dt;
+real t = 0;
+
+func u1ex = -cos(pi*x)*sin(pi*y)*exp(-t);
+func u2ex =  sin(pi*x)*cos(pi*y)*exp(-t);
+
+u1old = u1ex;
+u2old = u2ex;
+
+for (int m=0; m<M; m++)
+{
+    t = (m+1)*dt;
+
+    func u1ex = -cos(pi*x)*sin(pi*y)*exp(-t);
+    func u2ex =  sin(pi*x)*cos(pi*y)*exp(-t);
+    func f1 = (2*pi*pi*nu - 1)*(-cos(pi*x)*sin(pi*y)*exp(-t));
+    func f2 = (2*pi*pi*nu - 1)*( sin(pi*x)*cos(pi*y)*exp(-t));
+
+    problem Stokes([u1,u2,p],[v1,v2,q]) =
+        int2d(Th)(
+            (1/dt)*(u1*v1 + u2*v2)
+          + nu*( dx(u1)*dx(v1) + dy(u1)*dy(v1)
+               + dx(u2)*dx(v2) + dy(u2)*dy(v2) )
+          - p*(dx(v1) + dy(v2))
+          - q*(dx(u1) + dy(u2))
+        )
+      - int2d(Th)(
+            (1/dt)*(u1old*v1 + u2old*v2)
+          + f1*v1 + f2*v2
+        )
+      + on(1,2,3,4,5, u1=u1ex, u2=u2ex);
+
+    Stokes;
+
+    u1old = u1;
+    u2old = u2;
+}
+
+t = T;
+
+real erreur = sqrt(int2d(Th)(
+    (u1 - (-cos(pi*x)*sin(pi*y)*exp(-t)))^2 + 
+    (u2 -  (sin(pi*x)*cos(pi*y)*exp(-t)))^2
+));
+
+cout << "erreur L2 = " << erreur << endl;
+
+plot([u1,u2], fill=true, wait=true, value=true);
