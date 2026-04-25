@@ -1,6 +1,6 @@
 # Stokes Instationnaire — Cavité Entraînée
 
-Projet numérique MACS2 
+Projet numérique MACS2  
 Schémas temporels pour les équations de Stokes instationnaires appliqués au problème de la cavité entraînée (lid-driven cavity).
 
 ---
@@ -18,6 +18,7 @@ Schémas temporels pour les équations de Stokes instationnaires appliqués au p
 ├── convergence_mesh.py         # Convergence spatiale en h (loglog)
 ├── sensibilite_maillage.py     # Sensibilité au maillage — norme ||u(T)||_L2
 ├── sensibilite_nu.py           # Sensibilité à la viscosité — norme ||u(T)||_L2
+├── comparaison_ghia.py         # Comparaison profils vitesse vs Ghia et al. (1982)
 │
 └── README.md
 ```
@@ -138,6 +139,41 @@ python sensibilite_nu.py
 
 Trace $\|u(T)\|_{L^2}$ en fonction de $\nu$ à maillage fixe pour les trois schémas.
 
+### Comparaison avec Ghia et al. (1982)
+
+Ajouter d'abord les blocs d'export dans chaque `.edp` (voir ci-dessous), puis :
+
+```bash
+python comparaison_ghia.py
+```
+
+Produit une figure deux panneaux et un tableau d'écarts RMS entre les profils de vitesse et les données de référence de Ghia et al. (1982) pour Re=100.
+
+#### Blocs d'export à ajouter dans chaque `.edp`
+
+```freefem
+// Export profil vertical x=0.5
+{
+    ofstream fp1("stokes_euler_profile.csv");
+    fp1 << "y,u1,u2\n";
+    for(int i = 0; i <= 300; i++){
+        real yy = i * 1.0 / 300;
+        fp1 << yy << "," << u(0.5, yy) << "," << v(0.5, yy) << "\n";
+    }
+}
+// Export profil horizontal y=0.5
+{
+    ofstream fp2("stokes_euler_profile_h.csv");
+    fp2 << "x,u1,u2\n";
+    for(int i = 0; i <= 300; i++){
+        real xx = i * 1.0 / 300;
+        fp2 << xx << "," << u(xx, 0.5) << "," << v(xx, 0.5) << "\n";
+    }
+}
+```
+
+Adapter le nom du CSV (`stokes_euler` → `stokes_cn` / `stokes_bdf2`) selon le schéma.
+
 ---
 
 ## Résultats
@@ -168,3 +204,12 @@ L'ordre réduit de CN sur la cavité est dû à l'incompatibilité entre la cond
 | $\Delta t$ | 0.05–0.1 selon le schéma |
 | $N$ (maillage) | 20 |
 | Éléments finis | Taylor-Hood P2/P1 |
+
+---
+
+## Auteurs
+
+**Rabelais RIOLA**  
+**Eriode HOUNTONGBE**  
+**Jean-Marie AGOUNDO**  
+
