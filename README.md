@@ -13,6 +13,9 @@ Schémas temporels pour les équations de Stokes instationnaires appliqués au p
 ├── stokes_cn.edp               # Schéma Crank-Nicolson (ordre 2)
 ├── stokes_bdf2.edp             # Schéma BDF2 (ordre 2)
 │
+├── cavite_adaptee.edp          # Adaptation de maillage — cavité entraînée
+├── ellipse_adaptee.edp         # Adaptation de maillage — domaine percé d'ellipse
+│
 ├── plot_stokes.py              # Visualisation du champ final (6 panneaux)
 ├── convergence_ordre.py        # Convergence temporelle en dt (loglog)
 ├── convergence_mesh.py         # Convergence spatiale en h (loglog)
@@ -174,6 +177,40 @@ Produit une figure deux panneaux et un tableau d'écarts RMS entre les profils d
 
 Adapter le nom du CSV (`stokes_euler` → `stokes_cn` / `stokes_bdf2`) selon le schéma.
 
+### Adaptation de maillage
+
+Deux scripts FreeFEM permettent de générer des maillages adaptés et les visualisations associées (référence : cours *Maillages pour le Calcul Scientifique*, A. Collin, slides 81-87).
+
+```bash
+FreeFem++ cavite_adaptee.edp
+FreeFem++ ellipse_adaptee.edp
+```
+
+Chaque script effectue plusieurs cycles d'adaptation via la fonction `adaptmesh` de FreeFEM, qui construit une métrique anisotrope $M(T)$ basée sur la Hessienne $|H_u|$ de la solution. Le maillage final concentre les triangles dans les zones de fort gradient (coins de la cavité, abords de l'ellipse).
+
+**Sorties générées par chaque script (5 panneaux PostScript + 1 maillage)** :
+
+| Fichier | Contenu |
+|---------|---------|
+| `*_panneau1_maillage.eps` | Maillage adapté final |
+| `*_panneau2_vitesse.eps` | Norme de la vitesse $\|u\|$ |
+| `*_panneau3_maillage_vitesse.eps` | Maillage et vitesse superposés |
+| `*_panneau4_lignes_courant.eps` | Lignes de courant (iso-$\psi$) |
+| `*_panneau5_pression.eps` | Champ de pression |
+| `*_maillage_adapte.msh` | Maillage final FreeFEM (réutilisable) |
+
+**Paramètres principaux** (modifiables en tête de chaque script) :
+
+| Paramètre | Description | Valeur par défaut |
+|-----------|-------------|-------------------|
+| `Nadapt` | Nombre de cycles d'adaptation | 4 |
+| `errc` | Tolérance d'erreur d'interpolation | 1e-2 (cavité), 5e-3 (ellipse) |
+| `hmin`, `hmax` | Bornes sur la taille des éléments | 1e-3 / 0.1 |
+| `iso=false` | Adaptation anisotrope (vs isotrope) | false |
+| `nbvx` | Nombre maximal de sommets | 50000–80000 |
+
+**Note encodage** : sous Windows (PowerShell), FreeFEM peut rejeter les caractères accentués dans les chaînes `cmm="..."`. Les scripts fournis sont en ASCII pur pour cette raison.
+
 ---
 
 ## Résultats
@@ -193,6 +230,12 @@ L'ordre réduit de CN sur la cavité est dû à l'incompatibilité entre la cond
 - La norme $\|u(T)\|_{L^2}$ est quasi-indépendante du maillage pour $N \geq 16$ — les trois schémas convergent vers la même solution physique.
 - La norme décroît avec $\nu$ : à faible viscosité, la dissipation est moindre et l'écoulement est plus intense.
 
+### Adaptation de maillage
+
+- Sur la cavité, les triangles se concentrent automatiquement dans les coins supérieurs $(0,1)$ et $(1,1)$ — les points singuliers où la vitesse passe brutalement de $0$ à $1$.
+- Sur le domaine percé d'ellipse, le maillage adapté entoure l'obstacle avec des éléments anisotropes alignés sur le bord, et reste grossier dans les zones d'écoulement uniforme.
+- À nombre d'éléments comparable, l'adaptation réduit significativement l'erreur d'interpolation par rapport à un raffinement uniforme.
+
 ---
 
 ## Paramètres par défaut
@@ -211,5 +254,4 @@ L'ordre réduit de CN sur la cavité est dû à l'incompatibilité entre la cond
 
 **Rabelais RIOLA**  
 **Eriode HOUNTONGBE**  
-**Jean-Marie AGOUNDO**  
-
+**Jean-Marie AGOUNDO**
