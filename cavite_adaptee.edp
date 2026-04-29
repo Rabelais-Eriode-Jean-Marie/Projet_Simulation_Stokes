@@ -1,0 +1,135 @@
+
+verbosity = 0;
+
+// ---------- Paramètres physiques et numériques ----------
+real nu     = 0.1;        // viscosité cinématique
+real T      = 1.0;        // horizon temporel
+real dt     = 0.05;       // pas de temps
+int  Nt     = T/dt;       // nombre de pas
+int  Nadapt = 4;          // nombre de cycles d'adaptation
+real errc   = 1e-2;       // tolérance d'erreur pour adaptmesh
+
+// ---------- Maillage initial uniforme ----------
+int N0 = 20;
+mesh Th = square(N0, N0);
+
+// ---------- Espaces éléments finis Taylor-Hood (P2-P1) ----------
+fespace Vh(Th, [P2, P2]);   // vitesse vectorielle
+fespace Qh(Th, P1);         // pression continue
+fespace Sh(Th, P1);         // espace scalaire pour visualiser
+
+Vh [u1, u2], [v1, v2], [u1old, u2old];
+Qh p, q;
+
+// ---------- Conditions aux limites ----------
+// Couvercle : u = (1,0) sur y=1 ; murs : u=0 ailleurs
+// label 1=bas, 2=droite, 3=haut, 4=gauche (convention square)
+
+// ---------- Problème variationnel : Euler implicite ----------
+problem stokesEI([u1, u2, p], [v1, v2, q]) =
+    int2d(Th)( (u1*v1 + u2*v2)/dt )
+  + int2d(Th)( nu*( dx(u1)*dx(v1) + dy(u1)*dy(v1)
+                  + dx(u2)*dx(v2) + dy(u2)*dy(v2) ) )
+  - int2d(Th)( p*(dx(v1) + dy(v2)) )
+  - int2d(Th)( q*(dx(u1) + dy(u2)) )
+  - int2d(Th)( (u1old*v1 + u2old*v2)/dt )
+  + int2d(Th)( 1e-10*p*q )                  // stabilisation pression
+  + on(3, u1=1, u2=0)                        // couvercle
+  + on(1, 2, 4, u1=0, u2=0);                 // murs fixes
+
+// ---------- Boucle d'adaptation (méthode du slide 84) ----------
+cout << "===== DEBUT ADAPTATION =====" << endl;
+for (int iter = 0; iter < Nadapt; iter++) {
+
+    // initialisation
+    [u1, u2] = [0, 0];
+    [u1old, u2old] = [0, 0];
+
+    // boucle temporelle jusqu'à T
+    for (int n = 0; n < Nt; n++) {
+        u1old[] = u1[];
+        stokesEI;
+    }
+
+    cout << "Iter adapt " << iter
+         << " | nb triangles = " << Th.nt
+         << " | nb sommets = "   << Th.nv << endl;
+
+    // adaptation basée sur la Hessienne de ||u||
+    // FreeFEM calcule automatiquement la métrique M(T) du slide 85
+    Sh unorm = sqrt(u1^2 + u2^2);
+    Th = adaptmesh(Th, [u1, u2], p,
+                   err=errc, hmin=1e-3, hmax=0.1,
+                   iso=false,           // anisotrope
+                   nbvx=50000);
+
+    // re-projection sur le nouveau maillage
+    [u1, u2] = [u1, u2];
+    p = p;
+
+    errc = errc / 2;   // raffinement progressif
+}
+cout << "===== FIN ADAPTATION =====" << endl;
+cout << "Maillage final : " << Th.nt << " triangles, "
+     << Th.nv << " sommets" << endl;
+
+// ---------- Calcul final sur maillage adapté ----------
+[u1, u2] = [0, 0];
+[u1old, u2old] = [0, 0];
+for (int n = 0; n < Nt; n++) {
+    u1old[] = u1[];
+    stokesEI;
+}
+
+// ---------- Calcul de la fonction de courant pour les lignes ----------
+// psi tel que u1 = d(psi)/dy, u2 = -d(psi)/dx
+// On résout : -Laplacien(psi) = rot(u) = dy(u1) - dx(u2)
+fespace Psih(Th, P2);
+Psih psi, phi;
+solve poissonPsi(psi, phi) =
+    int2d(Th)( dx(psi)*dx(phi) + dy(psi)*dy(phi) )
+  - int2d(Th)( (dy(u1) - dx(u2))*phi )
+  + on(1, 2, 3, 4, psi=0);
+
+// ---------- Visualisations FreeFEM (4 panneaux) ----------
+Sh vitesseNorm = sqrt(u1^2 + u2^2);
+
+// Panneau 1 : maillage adapté
+plot(Th, wait=1, ps="cavite_panneau1_maillage.eps", cmm="Maillage adapte final - "+Th.nt+" triangles");
+
+// Panneau 2 : norme de la vitesse en couleur
+plot(vitesseNorm, fill=1, value=1, wait=1,
+     ps="cavite_panneau2_vitesse.eps",
+     cmm="Norme de la vitesse |u|");
+
+// Panneau 3 : maillage + champ de vitesse superposés
+plot(Th, vitesseNorm, fill=1, wait=1,
+     ps="cavite_panneau3_maillage_vitesse.eps",
+     cmm="Maillage adapte + |u|");
+
+// Panneau 4 : lignes de courant (iso-valeurs de psi)
+plot(psi, nbiso=30, wait=1,
+     ps="cavite_panneau4_lignes_courant.eps",
+     cmm="Lignes de courant (iso-psi)");
+
+// Panneau 5 bonus : pression
+plot(p, fill=1, value=1, wait=1,
+     ps="cavite_panneau5_pression.eps",
+     cmm="Champ de pression");
+
+// ---------- Export pour post-traitement éventuel ----------
+{
+    ofstream ff("cavite_solution.dat");
+    ff.precision(8);
+    for (int i = 0; i < Th.nv; i++)
+        ff << Th(i).x << " " << Th(i).y << " "
+           << u1[][i] << " " << u2[][i] << " "
+           << vitesseNorm[][i] << endl;
+}
+
+savemesh(Th, "cavite_maillage_adapte.msh");
+
+cout << "Fichiers generes :" << endl;
+cout << "  - cavite_panneau{1..5}_*.eps" << endl;
+cout << "  - cavite_solution.dat" << endl;
+cout << "  - cavite_maillage_adapte.msh" << endl;

@@ -1,0 +1,151 @@
+
+verbosity = 0;
+
+// ---------- Paramètres ----------
+real nu     = 1.0;
+real T      = 1.0;
+real dt     = 0.1;
+int  Nt     = T/dt;
+int  Nadapt = 4;
+real errc   = 5e-3;
+
+// ---------- Géométrie : rectangle [0,2]x[0,1] percé d'une ellipse ----------
+// Ellipse centrée en (1, 0.5), demi-axes a=0.3, b=0.15
+real a = 0.3, b = 0.15;
+real xc = 1.0, yc = 0.5;
+
+border bord1(t=0, 2)    { x = t;       y = 0;       label = 1; }
+border bord2(t=0, 1)    { x = 2;       y = t;       label = 2; }
+border bord3(t=2, 0)    { x = t;       y = 1;       label = 3; }
+border bord4(t=1, 0)    { x = 0;       y = t;       label = 4; }
+border ellipse(t=0, 2*pi) {
+    x = xc + a*cos(t);
+    y = yc + b*sin(t);
+    label = 5;
+}
+
+// Maillage initial - le signe négatif de ellipse oriente le trou correctement
+mesh Th = buildmesh(bord1(40) + bord2(20) + bord3(40) + bord4(20)
+                    + ellipse(-50));
+
+// ---------- Espaces ----------
+fespace Vh(Th, [P2, P2]);
+fespace Qh(Th, P1);
+fespace Sh(Th, P1);
+
+Vh [u1, u2], [v1, v2], [u1old, u2old];
+Qh p, q;
+
+// ---------- Solution exacte manufacturée (slide rapport sec. 7.4) ----------
+func u1ex = -cos(pi*x)*sin(pi*y)*exp(-1.0);  // évaluée à t=T
+func u2ex =  sin(pi*x)*cos(pi*y)*exp(-1.0);
+
+// Terme source f tel que la solution exacte vérifie Stokes
+// du/dt - nu*Laplacien(u) + grad(p) = f, div(u) = 0, p_ex = 0
+// du1/dt = cos(pi*x)*sin(pi*y)*exp(-t)
+// -nu*Lapl(u1) = -2*nu*pi^2*cos(pi*x)*sin(pi*y)*exp(-t) (signe inversé)
+// donc f1 = (1 - 2*nu*pi^2)*(-cos(pi*x)*sin(pi*y))*exp(-t) ... attention au signe
+// recalcul propre :
+// u1 = -cos(pi*x)*sin(pi*y)*exp(-t)
+// du1/dt = cos(pi*x)*sin(pi*y)*exp(-t) = -u1
+// Lapl(u1) = 2*pi^2*cos(pi*x)*sin(pi*y)*exp(-t) = -2*pi^2*u1
+// -nu*Lapl(u1) = 2*nu*pi^2*u1
+// f1 = du1/dt - nu*Lapl(u1) = -u1 + 2*nu*pi^2*u1 = (2*nu*pi^2 - 1)*u1
+func f1 = (2*nu*pi^2 - 1)*(-cos(pi*x)*sin(pi*y)*exp(-y*0));  // à t variable plus bas
+func f2 = (2*nu*pi^2 - 1)*( sin(pi*x)*cos(pi*y)*exp(-y*0));
+
+// Pour simplifier on prend f comme fonction du temps via une variable
+real tn = 0;
+func real fcoef() { return (2*nu*pi^2 - 1)*exp(-tn); }
+
+// ---------- Problème variationnel ----------
+problem stokesEI([u1, u2, p], [v1, v2, q]) =
+    int2d(Th)( (u1*v1 + u2*v2)/dt )
+  + int2d(Th)( nu*( dx(u1)*dx(v1) + dy(u1)*dy(v1)
+                  + dx(u2)*dx(v2) + dy(u2)*dy(v2) ) )
+  - int2d(Th)( p*(dx(v1) + dy(v2)) )
+  - int2d(Th)( q*(dx(u1) + dy(u2)) )
+  - int2d(Th)( (u1old*v1 + u2old*v2)/dt )
+  - int2d(Th)( fcoef()*(-cos(pi*x)*sin(pi*y))*v1 )
+  - int2d(Th)( fcoef()*( sin(pi*x)*cos(pi*y))*v2 )
+  + int2d(Th)( 1e-10*p*q )
+  // CL Dirichlet sur tous les bords avec la solution exacte évaluée à tn+dt
+  + on(1, 2, 3, 4, 5,
+       u1 = -cos(pi*x)*sin(pi*y)*exp(-(tn+dt)),
+       u2 =  sin(pi*x)*cos(pi*y)*exp(-(tn+dt)));
+
+// ---------- Boucle d'adaptation ----------
+cout << "===== DEBUT ADAPTATION (ellipse) =====" << endl;
+for (int iter = 0; iter < Nadapt; iter++) {
+
+    [u1, u2] = [0, 0];
+    [u1old, u2old] = [0, 0];
+    tn = 0;
+
+    for (int n = 0; n < Nt; n++) {
+        u1old[] = u1[];
+        stokesEI;
+        tn += dt;
+    }
+
+    cout << "Iter " << iter
+         << " | tri = " << Th.nt
+         << " | som = " << Th.nv << endl;
+
+    Th = adaptmesh(Th, [u1, u2], p,
+                   err=errc, hmin=5e-3, hmax=0.15,
+                   iso=false,
+                   nbvx=80000);
+
+    [u1, u2] = [u1, u2];
+    p = p;
+    errc = errc / 1.5;
+}
+
+// ---------- Calcul final ----------
+[u1, u2] = [0, 0];
+[u1old, u2old] = [0, 0];
+tn = 0;
+for (int n = 0; n < Nt; n++) {
+    u1old[] = u1[];
+    stokesEI;
+    tn += dt;
+}
+
+// ---------- Erreur L2 ----------
+real errL2 = sqrt( int2d(Th)( (u1 - u1ex)^2 + (u2 - u2ex)^2 ) );
+cout << "Erreur L2 finale : " << errL2 << endl;
+
+// ---------- Fonction de courant ----------
+fespace Psih(Th, P2);
+Psih psi, phi;
+solve poissonPsi(psi, phi) =
+    int2d(Th)( dx(psi)*dx(phi) + dy(psi)*dy(phi) )
+  - int2d(Th)( (dy(u1) - dx(u2))*phi )
+  + on(1, 2, 3, 4, 5, psi=0);
+
+// ---------- Visualisations ----------
+Sh vitesseNorm = sqrt(u1^2 + u2^2);
+
+plot(Th, wait=1, ps="ellipse_panneau1_maillage.eps",
+     cmm="Maillage adapte autour de l'ellipse - "+Th.nt+" triangles");
+
+plot(vitesseNorm, fill=1, value=1, wait=1,
+     ps="ellipse_panneau2_vitesse.eps",
+     cmm="Norme |u|");
+
+plot(Th, vitesseNorm, fill=1, wait=1,
+     ps="ellipse_panneau3_maillage_vitesse.eps",
+     cmm="Maillage + |u|");
+
+plot(psi, nbiso=40, wait=1,
+     ps="ellipse_panneau4_lignes_courant.eps",
+     cmm="Lignes de courant");
+
+plot(p, fill=1, value=1, wait=1,
+     ps="ellipse_panneau5_pression.eps",
+     cmm="Pression");
+
+savemesh(Th, "ellipse_maillage_adapte.msh");
+
+cout << "Fichiers generes." << endl;
